@@ -1,36 +1,47 @@
 <?php
-// register.php
-include "db.php";
+session_start();
+require_once "db.php";
 
 $error = "";
+$success = "";
 
-if (isset($_POST['register'])) {
-    $username = trim($_POST['username']);
-    $email = trim($_POST['email']);
-    $password = $_POST['password'];
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
-    // Basic validation
-    if ($username == "" || $email == "" || $password == "") {
-        $error = "All fields are required.";
+    $name = trim($_POST["name"]);
+    $email = trim($_POST["email"]);
+    $password = $_POST["password"];
+    $confirm = $_POST["confirm_password"];
+
+    if ($password !== $confirm) {
+        $error = "Passwords do not match";
     } else {
-        // Check if email already exists
-        $check = $conn->query("SELECT id FROM users WHERE email='$email'");
+        try {
+            // Check if email already exists
+            $check = $pdo->prepare("SELECT id FROM users WHERE email = :email");
+            $check->execute(["email" => $email]);
 
-        if ($check->num_rows > 0) {
-            $error = "Email already registered.";
-        } else {
-            // Hash password
-            $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+            if ($check->fetch()) {
+                $error = "Email already registered";
+            } else {
+                // Hash password
+                $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
 
-            // Insert user
-            $conn->query(
-                "INSERT INTO users (username, email, password)
-                 VALUES ('$username', '$email', '$hashedPassword')"
-            );
+                // Insert user
+                $stmt = $pdo->prepare(
+                    "INSERT INTO users (name, email, password)
+                     VALUES (:name, :email, :password)"
+                );
 
-            // Redirect to login page after successful registration
-            header("Location: login.php");
-            exit();
+                $stmt->execute([
+                    "name" => $name,
+                    "email" => $email,
+                    "password" => $hashedPassword
+                ]);
+
+                $success = "Registration successful! You can now log in.";
+            }
+        } catch (PDOException $e) {
+            $error = "Registration failed";
         }
     }
 }
@@ -40,67 +51,75 @@ if (isset($_POST['register'])) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Register | To-Do Calendar App</title>
+    <title>Register</title>
 
-    <!-- Bootstrap -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <!-- Custom Styles -->
-    <link rel="stylesheet" href="assets/style.css">
 </head>
 
-<body class="d-flex justify-content-center align-items-center">
+<body class="bg-primary">
 
-<div class="card p-4 shadow" style="width:420px;">
-    <h3 class="text-center mb-3">Create Account</h3>
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-5">
 
-    <?php if ($error): ?>
-        <div class="alert alert-danger">
-            <?= $error ?>
+            <div class="card p-4 shadow">
+                <h3 class="text-center mb-3">Create Account</h3>
+
+                <?php if ($error): ?>
+                    <div class="alert alert-danger"><?= htmlspecialchars($error) ?></div>
+                <?php endif; ?>
+
+                <?php if ($success): ?>
+                    <div class="alert alert-success"><?= htmlspecialchars($success) ?></div>
+                <?php endif; ?>
+
+                <form method="POST">
+                    <input
+                        class="form-control mb-3"
+                        type="text"
+                        name="name"
+                        placeholder="Full Name"
+                        required
+                    >
+
+                    <input
+                        class="form-control mb-3"
+                        type="email"
+                        name="email"
+                        placeholder="Email Address"
+                        required
+                    >
+
+                    <input
+                        class="form-control mb-3"
+                        type="password"
+                        name="password"
+                        placeholder="Password"
+                        required
+                    >
+
+                    <input
+                        class="form-control mb-3"
+                        type="password"
+                        name="confirm_password"
+                        placeholder="Confirm Password"
+                        required
+                    >
+
+                    <button class="btn btn-primary w-100">
+                        Register
+                    </button>
+                </form>
+
+                <p class="text-center mt-3">
+                    Already have an account?
+                    <a href="login.php">Login</a>
+                </p>
+            </div>
+
         </div>
-    <?php endif; ?>
-
-    <form method="POST" novalidate>
-        <input
-            type="text"
-            name="username"
-            class="form-control mb-2"
-            placeholder="Username"
-            required
-        >
-
-        <input
-            type="email"
-            name="email"
-            class="form-control mb-2"
-            placeholder="Email address"
-            required
-        >
-
-        <input
-            type="password"
-            name="password"
-            class="form-control mb-3"
-            placeholder="Password"
-            required
-        >
-
-        <button
-            type="submit"
-            name="register"
-            class="btn btn-blue w-100"
-        >
-            Register
-        </button>
-    </form>
-
-    <div class="text-center mt-3">
-        <a href="index.php">← Back to Home</a><br>
-        <a href="login.php">Already have an account? Login</a>
     </div>
 </div>
 
 </body>
 </html>
-
-

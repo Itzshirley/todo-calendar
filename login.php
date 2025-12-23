@@ -1,28 +1,24 @@
 <?php
-include "db.php";
+session_start();
+require_once "db.php";
 
 $error = "";
 
-if (isset($_POST['login'])) {
-    $email = $_POST['email'];
-    $password = $_POST['password'];
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
-    $result = $conn->query("SELECT * FROM users WHERE email='$email'");
+    $email = trim($_POST["email"]);
+    $password = trim($_POST["password"]);
 
-    if ($result->num_rows == 1) {
-        $user = $result->fetch_assoc();
+    $stmt = $pdo->prepare("SELECT id, password FROM users WHERE email = :email");
+    $stmt->execute(["email" => $email]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (password_verify($password, $user['password'])) {
-            $_SESSION['user_id'] = $user['id'];
-
-            // ✅ REDIRECT AFTER LOGIN
-            header("Location: dashboard.php");
-            exit();
-        } else {
-            $error = "Incorrect password";
-        }
+    if ($user && password_verify($password, $user["password"])) {
+        $_SESSION["user_id"] = $user["id"];
+        header("Location: dashboard.php");
+        exit;
     } else {
-        $error = "User not found";
+        $error = "Invalid email or password";
     }
 }
 ?>
@@ -30,36 +26,31 @@ if (isset($_POST['login'])) {
 <!DOCTYPE html>
 <html>
 <head>
-<title>Login</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css">
+    <title>Login</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
+<body class="bg-primary">
 
-<body class="d-flex justify-content-center align-items-center">
+<div class="container mt-5">
+    <div class="card p-4 shadow">
+        <h3 class="text-center">Login</h3>
 
-<div class="card p-4 shadow" style="width:400px;">
-<h3 class="text-center mb-3">Login</h3>
+        <?php if ($error): ?>
+            <div class="alert alert-danger"><?= $error ?></div>
+        <?php endif; ?>
 
-<?php if ($error): ?>
-<div class="alert alert-danger"><?= $error ?></div>
-<?php endif; ?>
+        <form method="POST">
+            <input class="form-control mb-3" type="email" name="email" placeholder="Email" required>
+            <input class="form-control mb-3" type="password" name="password" placeholder="Password" required>
+            <button class="btn btn-primary w-100">Login</button>
+        </form>
 
-<form method="POST">
-    <input class="form-control mb-2" name="email" type="email" placeholder="Email" required>
-    <input class="form-control mb-3" name="password" type="password" placeholder="Password" required>
-
-    <!-- IMPORTANT -->
-    <button class="btn btn-blue w-100" type="submit" name="login">
-        Login
-    </button>
-</form>
-
-<div class="text-center mt-3">
-    <a href="register.php">No account? Register</a>
-</div>
+        <p class="mt-3 text-center">
+            No account?
+            <a href="register.php">Register</a>
+        </p>
+    </div>
 </div>
 
 </body>
 </html>
-
-
