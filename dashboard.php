@@ -1,129 +1,143 @@
 <?php
 session_start();
-require_once "db.php";
+require "db.php";
 
 if (!isset($_SESSION["user_id"])) {
     header("Location: login.php");
     exit;
 }
 
-$name = $_SESSION["name"];
+$userId = $_SESSION["user_id"];
+$userName = $_SESSION["name"] ?? "User";
 
+/* ======================
+   DATE / CALENDAR LOGIC
+====================== */
 $month = $_GET["month"] ?? date("m");
 $year  = $_GET["year"] ?? date("Y");
 
-$month = (int)$month;
-$year  = (int)$year;
-
 $firstDay = strtotime("$year-$month-01");
 $daysInMonth = date("t", $firstDay);
-$startDay = date("w", $firstDay);
+$startDay = date("N", $firstDay);
 
-// Fetch events
-$stmt = $pdo->prepare("SELECT event_date, type FROM events");
-$stmt->execute();
-$events = $stmt->fetchAll(PDO::FETCH_GROUP | PDO::FETCH_COLUMN);
+/* ======================
+   WEEKLY SUMMARY
+====================== */
+$weekStart = date("Y-m-d", strtotime("monday this week"));
+$weekEnd   = date("Y-m-d", strtotime("sunday this week"));
+
+$stmt = $pdo->prepare("
+    SELECT title, task_date, status
+    FROM tasks
+    WHERE user_id = :u
+      AND task_date BETWEEN :s AND :e
+    ORDER BY task_date
+");
+$stmt->execute([
+    "u" => $userId,
+    "s" => $weekStart,
+    "e" => $weekEnd
+]);
+$weeklyTasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+/* ======================
+   KENYAN PUBLIC HOLIDAYS
+====================== */
+$holidays = [
+    "$year-01-01" => "New Year 🎉",
+    "$year-05-01" => "Labour Day 🛠️",
+    "$year-06-01" => "Madaraka 🇰🇪",
+    "$year-10-20" => "Mashujaa 💪",
+    "$year-12-12" => "Jamhuri 🇰🇪",
+    "$year-12-25" => "Christmas 🎄"
+];
 ?>
-
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<title>Dashboard</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+.calendar {display:grid;grid-template-columns:repeat(7,1fr);gap:5px;}
+.day {padding:10px;border:1px solid #ddd;text-align:center;cursor:pointer;}
+.today {background:#cce5ff;}
+.holiday {background:#ffe5e5;font-size:0.8em;}
+</style>
 </head>
-
-<body class="bg-primary text-white">
+<body class="bg-light">
 
 <div class="container mt-4">
 
-    <!-- HEADER -->
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h4>Dashboard — Welcome, <?= htmlspecialchars($name) ?></h4>
+<h4>👋 Welcome, <?= htmlspecialchars($userName) ?></h4>
+<p><strong>Today:</strong> <?= date("l, d F Y") ?></p>
 
-        <select class="form-select w-auto">
-            <option>Blue</option>
-            <option>Dark</option>
-            <option>Light</option>
-        </select>
-    </div>
+<a href="logout.php" class="btn btn-danger btn-sm mb-3">Logout</a>
 
-    <!-- CATEGORY BUTTONS -->
-    <div class="row text-center mb-4">
-        <?php
-        $cats = ["Work", "School", "Health", "Fitness", "Others"];
-        foreach ($cats as $cat):
-        ?>
-            <div class="col-md-2 mb-2">
-                <a href="category.php?type=<?= strtolower($cat) ?>"
-                   class="btn btn-light w-100"><?= $cat ?></a>
-            </div>
-        <?php endforeach; ?>
-    </div>
+<!-- CATEGORY BUTTONS -->
+<div class="mb-3">
+    <a href="tasks.php?cat=work" class="btn btn-primary">💼 Work</a>
+    <a href="tasks.php?cat=school" class="btn btn-success">🎓 School</a>
+    <a href="tasks.php?cat=health" class="btn btn-danger">❤️ Health</a>
+    <a href="tasks.php?cat=personal" class="btn btn-warning">🏠 Personal</a>
+</div>
 
-    <!-- CALENDAR HEADER -->
-    <div class="card text-dark p-3">
-        <div class="d-flex justify-content-between align-items-center mb-2">
+<!-- WEEKLY SUMMARY -->
+<div class="card mb-4 p-3">
+<h5>📊 Weekly Task Summary</h5>
+<small><?= $weekStart ?> → <?= $weekEnd ?></small>
 
-            <!-- PREVIOUS MONTH -->
-            <a class="btn btn-outline-primary"
-               href="?month=<?= $month-1 ?>&year=<?= $year ?>">◀</a>
+<?php if (!$weeklyTasks): ?>
+<p class="mt-2">No tasks this week.</p>
+<?php endif; ?>
 
-            <!-- MONTH + YEAR -->
-            <h5>
-                <?= date("F", $firstDay) ?>
-                <select onchange="location.href='?month=<?= $month ?>&year='+this.value">
-                    <?php for ($y = 2025; $y <= 2035; $y++): ?>
-                        <option value="<?= $y ?>" <?= $y == $year ? "selected" : "" ?>>
-                            <?= $y ?>
-                        </option>
-                    <?php endfor; ?>
-                </select>
-            </h5>
+<?php foreach ($weeklyTasks as $task): ?>
+<div>
+📌 <?= htmlspecialchars($task["task_date"]) ?> —
+<?= htmlspecialchars($task["title"]) ?>
+<span class="badge bg-secondary"><?= htmlspecialchars($task["status"]) ?></span>
+</div>
+<?php endforeach; ?>
+</div>
 
-            <!-- NEXT MONTH -->
-            <a class="btn btn-outline-primary"
-               href="?month=<?= $month+1 ?>&year=<?= $year ?>">▶</a>
-        </div>
+<!-- CALENDAR NAVIGATION -->
+<div class="d-flex justify-content-between align-items-center mb-2">
+<button class="btn btn-outline-secondary" onclick="navigate(-1)">⬅</button>
+<h5><?= date("F", $firstDay) ?> <?= $year ?></h5>
+<button class="btn btn-outline-secondary" onclick="navigate(1)">➡</button>
+</div>
 
-        <!-- CALENDAR TABLE -->
-        <table class="table table-bordered text-center">
-            <thead>
-                <tr>
-                    <?php foreach (["Sun","Mon","Tue","Wed","Thu","Fri","Sat"] as $d): ?>
-                        <th><?= $d ?></th>
-                    <?php endforeach; ?>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                <?php
-                for ($i=0; $i<$startDay; $i++) echo "<td></td>";
+<!-- CALENDAR -->
+<div class="calendar">
+<?php
+for ($i=1; $i<$startDay; $i++) echo "<div></div>";
 
-                for ($day=1; $day<=$daysInMonth; $day++):
-                    $date = "$year-$month-".str_pad($day,2,"0",STR_PAD_LEFT);
+for ($d=1; $d<=$daysInMonth; $d++) {
+    $date = "$year-$month-".str_pad($d,2,"0",STR_PAD_LEFT);
+    $class = "day";
+    if ($date == date("Y-m-d")) $class .= " today";
+    if (isset($holidays[$date])) $class .= " holiday";
 
-                    if (($day+$startDay-1)%7==0 && $day!=1) echo "</tr><tr>";
-                ?>
-                    <td>
-                        <a href="diary.php?date=<?= $date ?>" class="text-decoration-none">
-                            <?= $day ?>
-                        </a>
-
-                        <?php
-                        if (isset($events[$date])) {
-                            foreach ($events[$date] as $type) {
-                                echo $type === "holiday" ? " 🎉" : " 🔔";
-                            }
-                        }
-                        ?>
-                    </td>
-                <?php endfor; ?>
-                </tr>
-            </tbody>
-        </table>
-    </div>
+    echo "<div class='$class' onclick=\"openDiary('$date')\">
+          $d<br>".($holidays[$date] ?? "")."
+          </div>";
+}
+?>
+</div>
 
 </div>
+
+<script>
+function navigate(step){
+    let m = <?= $month ?> + step;
+    let y = <?= $year ?>;
+    if(m<1){m=12;y--}
+    if(m>12){m=1;y++}
+    window.location = `?month=${m}&year=${y}`;
+}
+function openDiary(date){
+    window.location = "diary.php?date="+date;
+}
+</script>
 
 </body>
 </html>
