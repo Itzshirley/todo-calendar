@@ -1,0 +1,23 @@
+body {
+    background-color: #0d6efd;
+    min-height: 100vh;
+}
+
+.card {
+    border-radius: 15px;
+}
+
+.btn-blue {
+    background-color: #0b5ed7;
+    color: white;
+}
+
+.btn-blue:hover {
+    background-color: #084298;
+    color: white;
+}
+
+.vertical-list button {
+    width: 100%;
+    margin-bottom: 10px;
+}
