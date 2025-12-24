@@ -19,10 +19,10 @@ $userName = $_SESSION["name"] ?? "User";
 $month = isset($_GET["month"]) ? (int)$_GET["month"] : (int)date("m");
 $year  = isset($_GET["year"])  ? (int)$_GET["year"]  : (int)date("Y");
 
-$firstDay      = strtotime("$year-$month-01");
-$daysInMonth   = date("t", $firstDay);
-$startDay      = date("N", $firstDay);
-$today         = date("Y-m-d");
+$firstDay    = strtotime("$year-$month-01");
+$daysInMonth = date("t", $firstDay);
+$startDay    = date("N", $firstDay);
+$today       = date("Y-m-d");
 
 /* =====================
    WEEK RANGE
@@ -48,15 +48,36 @@ $stmt->execute([
 $weeklyTasks = $stmt->fetchAll();
 
 /* =====================
+   TASK INDICATORS (MONTH)
+===================== */
+$stmt = $pdo->prepare("
+    SELECT task_date, status
+    FROM tasks
+    WHERE user_id = :uid
+      AND EXTRACT(MONTH FROM task_date) = :m
+      AND EXTRACT(YEAR FROM task_date) = :y
+");
+$stmt->execute([
+    "uid" => $userId,
+    "m"   => $month,
+    "y"   => $year
+]);
+
+$taskIndicators = [];
+foreach ($stmt->fetchAll() as $t) {
+    $taskIndicators[$t["task_date"]][] = $t["status"];
+}
+
+/* =====================
    KENYAN HOLIDAYS
 ===================== */
 $holidays = [
-    "$year-01-01" => "New Year 🎉",
-    "$year-05-01" => "Labour Day 🛠️",
-    "$year-06-01" => "Madaraka 🇰🇪",
-    "$year-10-20" => "Mashujaa 💪",
-    "$year-12-12" => "Jamhuri 🇰🇪",
-    "$year-12-25" => "Christmas 🎄"
+    "$year-01-01" => "🎉",
+    "$year-05-01" => "🛠️",
+    "$year-06-01" => "🇰🇪",
+    "$year-10-20" => "💪",
+    "$year-12-12" => "🇰🇪",
+    "$year-12-25" => "🎄"
 ];
 ?>
 <!DOCTYPE html>
@@ -80,8 +101,12 @@ $holidays = [
     cursor:pointer;
     background:#fff;
 }
-.today {background:#cce5ff;}
-.holiday {background:#ffe6e6;font-size:0.75em;}
+.today {
+    background:#cce5ff;
+}
+.indicators {
+    font-size:0.8em;
+}
 </style>
 </head>
 
@@ -122,7 +147,7 @@ $holidays = [
 <?php endforeach; ?>
 </div>
 
-<!-- MONTH NAV -->
+<!-- MONTH NAVIGATION -->
 <div class="d-flex justify-content-between align-items-center mb-2">
 <button class="btn btn-outline-secondary" onclick="changeMonth(-1)">⬅</button>
 <h5><?= date("F Y", $firstDay) ?></h5>
@@ -131,23 +156,31 @@ $holidays = [
 
 <!-- CALENDAR -->
 <div class="calendar mb-5">
-
 <?php
-for ($i=1; $i<$startDay; $i++) echo "<div></div>";
+for ($i = 1; $i < $startDay; $i++) {
+    echo "<div></div>";
+}
 
-for ($d=1; $d<=$daysInMonth; $d++) {
+for ($d = 1; $d <= $daysInMonth; $d++) {
     $date = sprintf("%04d-%02d-%02d", $year, $month, $d);
     $class = "day";
-
     if ($date === $today) $class .= " today";
-    if (isset($holidays[$date])) $class .= " holiday";
+
+    $icons = "";
+    if (isset($taskIndicators[$date])) {
+        foreach ($taskIndicators[$date] as $st) {
+            if ($st === "pending") $icons .= "⏳ ";
+            if ($st === "in_progress") $icons .= "🚧 ";
+            if ($st === "done") $icons .= "✅ ";
+        }
+    }
 
     echo "<div class='$class' onclick=\"openDiary('$date')\">
-            $d<br>".($holidays[$date] ?? "")."
+            <strong>$d</strong><br>
+            <span class='indicators'>$icons ".($holidays[$date] ?? "")."</span>
           </div>";
 }
 ?>
-
 </div>
 
 </div>
@@ -156,12 +189,12 @@ for ($d=1; $d<=$daysInMonth; $d++) {
 function changeMonth(step){
     let m = <?= $month ?> + step;
     let y = <?= $year ?>;
-    if(m < 1){ m = 12; y--; }
-    if(m > 12){ m = 1; y++; }
-    window.location = "?month="+m+"&year="+y;
+    if (m < 1) { m = 12; y--; }
+    if (m > 12) { m = 1; y++; }
+    window.location = "?month=" + m + "&year=" + y;
 }
 function openDiary(date){
-    window.location = "diary.php?date="+date;
+    window.location = "diary.php?date=" + date;
 }
 </script>
 
