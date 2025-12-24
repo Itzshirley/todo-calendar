@@ -2,47 +2,54 @@
 session_start();
 require "db.php";
 
+/* =====================
+   AUTH CHECK
+===================== */
 if (!isset($_SESSION["user_id"])) {
     header("Location: login.php");
     exit;
 }
 
-$userId = $_SESSION["user_id"];
+$userId   = $_SESSION["user_id"];
 $userName = $_SESSION["name"] ?? "User";
 
-/* ======================
-   DATE / CALENDAR LOGIC
-====================== */
-$month = $_GET["month"] ?? date("m");
-$year  = $_GET["year"] ?? date("Y");
+/* =====================
+   DATE HANDLING
+===================== */
+$month = isset($_GET["month"]) ? (int)$_GET["month"] : (int)date("m");
+$year  = isset($_GET["year"])  ? (int)$_GET["year"]  : (int)date("Y");
 
-$firstDay = strtotime("$year-$month-01");
-$daysInMonth = date("t", $firstDay);
-$startDay = date("N", $firstDay);
+$firstDay      = strtotime("$year-$month-01");
+$daysInMonth   = date("t", $firstDay);
+$startDay      = date("N", $firstDay);
+$today         = date("Y-m-d");
 
-/* ======================
-   WEEKLY SUMMARY
-====================== */
+/* =====================
+   WEEK RANGE
+===================== */
 $weekStart = date("Y-m-d", strtotime("monday this week"));
 $weekEnd   = date("Y-m-d", strtotime("sunday this week"));
 
+/* =====================
+   WEEKLY TASK SUMMARY
+===================== */
 $stmt = $pdo->prepare("
-    SELECT title, task_date, status
+    SELECT task, task_date, status
     FROM tasks
-    WHERE user_id = :u
-      AND task_date BETWEEN :s AND :e
+    WHERE user_id = :uid
+      AND task_date BETWEEN :ws AND :we
     ORDER BY task_date
 ");
 $stmt->execute([
-    "u" => $userId,
-    "s" => $weekStart,
-    "e" => $weekEnd
+    "uid" => $userId,
+    "ws"  => $weekStart,
+    "we"  => $weekEnd
 ]);
-$weeklyTasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$weeklyTasks = $stmt->fetchAll();
 
-/* ======================
-   KENYAN PUBLIC HOLIDAYS
-====================== */
+/* =====================
+   KENYAN HOLIDAYS
+===================== */
 $holidays = [
     "$year-01-01" => "New Year 🎉",
     "$year-05-01" => "Labour Day 🛠️",
@@ -53,86 +60,105 @@ $holidays = [
 ];
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+<meta charset="UTF-8">
 <title>Dashboard</title>
+
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
 <style>
-.calendar {display:grid;grid-template-columns:repeat(7,1fr);gap:5px;}
-.day {padding:10px;border:1px solid #ddd;text-align:center;cursor:pointer;}
+.calendar {
+    display:grid;
+    grid-template-columns:repeat(7,1fr);
+    gap:5px;
+}
+.day {
+    border:1px solid #ccc;
+    padding:10px;
+    text-align:center;
+    cursor:pointer;
+    background:#fff;
+}
 .today {background:#cce5ff;}
-.holiday {background:#ffe5e5;font-size:0.8em;}
+.holiday {background:#ffe6e6;font-size:0.75em;}
 </style>
 </head>
+
 <body class="bg-light">
 
 <div class="container mt-4">
 
-<h4>👋 Welcome, <?= htmlspecialchars($userName) ?></h4>
+<!-- HEADER -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>👋 Welcome, <?= htmlspecialchars($userName) ?></h4>
+    <a href="logout.php" class="btn btn-danger btn-sm">Logout</a>
+</div>
+
 <p><strong>Today:</strong> <?= date("l, d F Y") ?></p>
 
-<a href="logout.php" class="btn btn-danger btn-sm mb-3">Logout</a>
-
 <!-- CATEGORY BUTTONS -->
-<div class="mb-3">
-    <a href="tasks.php?cat=work" class="btn btn-primary">💼 Work</a>
-    <a href="tasks.php?cat=school" class="btn btn-success">🎓 School</a>
-    <a href="tasks.php?cat=health" class="btn btn-danger">❤️ Health</a>
-    <a href="tasks.php?cat=personal" class="btn btn-warning">🏠 Personal</a>
+<div class="mb-4">
+    <a href="tasks.php?category=work" class="btn btn-primary">💼 Work</a>
+    <a href="tasks.php?category=school" class="btn btn-success">🎓 School</a>
+    <a href="tasks.php?category=health" class="btn btn-danger">❤️ Health</a>
+    <a href="tasks.php?category=personal" class="btn btn-warning">🏠 Personal</a>
 </div>
 
 <!-- WEEKLY SUMMARY -->
-<div class="card mb-4 p-3">
-<h5>📊 Weekly Task Summary</h5>
-<small><?= $weekStart ?> → <?= $weekEnd ?></small>
+<div class="card p-3 mb-4">
+<h5>📊 Weekly Tasks (<?= $weekStart ?> → <?= $weekEnd ?>)</h5>
 
 <?php if (!$weeklyTasks): ?>
-<p class="mt-2">No tasks this week.</p>
+<p>No tasks this week.</p>
 <?php endif; ?>
 
 <?php foreach ($weeklyTasks as $task): ?>
 <div>
 📌 <?= htmlspecialchars($task["task_date"]) ?> —
-<?= htmlspecialchars($task["title"]) ?>
+<?= htmlspecialchars($task["task"]) ?>
 <span class="badge bg-secondary"><?= htmlspecialchars($task["status"]) ?></span>
 </div>
 <?php endforeach; ?>
 </div>
 
-<!-- CALENDAR NAVIGATION -->
+<!-- MONTH NAV -->
 <div class="d-flex justify-content-between align-items-center mb-2">
-<button class="btn btn-outline-secondary" onclick="navigate(-1)">⬅</button>
-<h5><?= date("F", $firstDay) ?> <?= $year ?></h5>
-<button class="btn btn-outline-secondary" onclick="navigate(1)">➡</button>
+<button class="btn btn-outline-secondary" onclick="changeMonth(-1)">⬅</button>
+<h5><?= date("F Y", $firstDay) ?></h5>
+<button class="btn btn-outline-secondary" onclick="changeMonth(1)">➡</button>
 </div>
 
 <!-- CALENDAR -->
-<div class="calendar">
+<div class="calendar mb-5">
+
 <?php
 for ($i=1; $i<$startDay; $i++) echo "<div></div>";
 
 for ($d=1; $d<=$daysInMonth; $d++) {
-    $date = "$year-$month-".str_pad($d,2,"0",STR_PAD_LEFT);
+    $date = sprintf("%04d-%02d-%02d", $year, $month, $d);
     $class = "day";
-    if ($date == date("Y-m-d")) $class .= " today";
+
+    if ($date === $today) $class .= " today";
     if (isset($holidays[$date])) $class .= " holiday";
 
     echo "<div class='$class' onclick=\"openDiary('$date')\">
-          $d<br>".($holidays[$date] ?? "")."
+            $d<br>".($holidays[$date] ?? "")."
           </div>";
 }
 ?>
+
 </div>
 
 </div>
 
 <script>
-function navigate(step){
+function changeMonth(step){
     let m = <?= $month ?> + step;
     let y = <?= $year ?>;
-    if(m<1){m=12;y--}
-    if(m>12){m=1;y++}
-    window.location = `?month=${m}&year=${y}`;
+    if(m < 1){ m = 12; y--; }
+    if(m > 12){ m = 1; y++; }
+    window.location = "?month="+m+"&year="+y;
 }
 function openDiary(date){
     window.location = "diary.php?date="+date;
