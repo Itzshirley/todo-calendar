@@ -21,7 +21,7 @@ if (!$category) {
    FETCH TASKS BY CATEGORY
 ===================== */
 $stmt = $pdo->prepare("
-    SELECT task_id, task, task_date, status
+    SELECT task, task_date, status
     FROM tasks
     WHERE user_id = :uid
       AND category = :cat
@@ -32,13 +32,13 @@ $stmt->execute([
     "cat" => $category
 ]);
 
-$tasks = $stmt->fetchAll();
+$tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title><?= ucfirst($category) ?> Tasks</title>
+<title><?= ucfirst(htmlspecialchars($category)) ?> Tasks</title>
 
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
@@ -48,7 +48,7 @@ $tasks = $stmt->fetchAll();
 
 <a href="dashboard.php" class="btn btn-secondary btn-sm mb-3">⬅ Back to Dashboard</a>
 
-<h4><?= ucfirst($category) ?> Tasks</h4>
+<h4><?= ucfirst(htmlspecialchars($category)) ?> Tasks</h4>
 
 <?php if (!$tasks): ?>
 <p>No tasks in this category.</p>
