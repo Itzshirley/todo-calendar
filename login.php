@@ -1,63 +1,42 @@
 <?php
 session_start();
-require_once "db.php";
+require "db.php";
 
 $error = "";
+if ($_SERVER["REQUEST_METHOD"]=="POST") {
+$stmt=$pdo->prepare("SELECT * FROM users WHERE email=:e");
+$stmt->execute(["e"=>$_POST["email"]]);
+$user=$stmt->fetch();
 
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $email = trim($_POST["email"]);
-    $password = $_POST["password"];
-
-    $stmt = $pdo->prepare("SELECT * FROM users WHERE email = :email");
-    $stmt->execute(["email" => $email]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if ($user && password_verify($password, $user["password"])) {
-        $_SESSION["user_id"] = $user["id"];
-        $_SESSION["name"] = $user["name"]; // ✅ IMPORTANT
-        header("Location: dashboard.php");
-        exit;
-    } else {
-        $error = "Invalid email or password";
-    }
+if($user && password_verify($_POST["password"],$user["password"])){
+$_SESSION["user_id"]=$user["id"];
+$_SESSION["name"]=$user["name"];
+header("Location: dashboard.php");
+exit;
+}
+$error="Invalid login";
 }
 ?>
-
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Login</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<title>Login</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
+<body class="bg-light">
 
-<body class="bg-primary">
+<div class="container mt-5" style="max-width:400px;">
+<h3 class="text-center">Login</h3>
 
-<div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-md-4">
+<?php if($error): ?>
+<div class="alert alert-danger"><?= $error ?></div>
+<?php endif; ?>
 
-            <div class="card p-4 shadow">
-                <h3 class="text-center mb-3">Login</h3>
-
-                <?php if ($error): ?>
-                    <div class="alert alert-danger"><?= htmlspecialchars($error) ?></div>
-                <?php endif; ?>
-
-                <form method="POST">
-                    <input class="form-control mb-3" type="email" name="email" placeholder="Email" required>
-                    <input class="form-control mb-3" type="password" name="password" placeholder="Password" required>
-
-                    <button class="btn btn-primary w-100">Login</button>
-                </form>
-
-                <p class="text-center mt-3">
-                    No account? <a href="register.php">Register</a>
-                </p>
-            </div>
-
-        </div>
-    </div>
+<form method="POST" class="card p-3">
+<input name="email" class="form-control mb-2" placeholder="Email" required>
+<input type="password" name="password" class="form-control mb-2" placeholder="Password" required>
+<button class="btn btn-dark">Login</button>
+</form>
 </div>
-
 </body>
 </html>
